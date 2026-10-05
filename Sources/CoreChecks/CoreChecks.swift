@@ -80,6 +80,34 @@ struct CoreChecks {
         check("AI guard rejects empty output", !AIReviewer.isFaithful(original: "send the report", revised: ""))
         expect("AI reply tags are stripped", AIReviewer.cleaned("<transcript>Hello there.</transcript>"), "Hello there.")
         expect("AI reply quotes are stripped", AIReviewer.cleaned("\"Hello there.\""), "Hello there.")
+        expect("echoed unsure/context tags are stripped",
+               AIReviewer.cleaned("<context>Earlier text.</context>\n<unsure>act</unsure>\nOpen the app."), "Open the app.")
+
+        let grouped = RecognizedWord.group([
+            (" The", 0.99), (" bl", 0.6), ("ack", 0.9), ("off", 0.95), (".", 0.1),
+        ])
+        check("tokens group into words at leading spaces",
+              grouped.map(\.text) == ["The", "blackoff."])
+        check("a word takes its weakest piece's confidence, ignoring punctuation",
+              grouped.map(\.confidence) == [0.99, 0.6])
+
+        let words = [
+            RecognizedWord(text: "Code.", confidence: 0.5), RecognizedWord(text: "types,", confidence: 0.55),
+            RecognizedWord(text: "fine", confidence: 0.95), RecognizedWord(text: "types", confidence: 0.4),
+            RecognizedWord(text: "corps", confidence: 0.59),
+        ]
+        check("only unsure lowercase words are flagged, once, without punctuation",
+              DictationPipeline.uncertainWords(in: words) == ["types", "corps"])
+
+        expect("prompt without extras is just the transcript",
+               AIReviewer.prompt(for: "open the act", uncertainWords: [], context: nil),
+               "<transcript>open the act</transcript>")
+        expect("prompt carries context and unsure words",
+               AIReviewer.prompt(for: "open the act", uncertainWords: ["act"], context: "  Our app is live.\n"),
+               "<context>Our app is live.</context>\n<unsure>act</unsure>\n<transcript>open the act</transcript>")
+        check("prompt context is capped",
+              AIReviewer.prompt(for: "x", uncertainWords: [], context: String(repeating: "a", count: 2000)).count
+              < AIReviewer.maxContextCharacters + 60)
 
         print(failures == 0 ? "\nAll checks passed." : "\n\(failures) check(s) failed.")
         exit(failures == 0 ? 0 : 1)

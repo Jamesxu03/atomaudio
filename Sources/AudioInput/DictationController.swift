@@ -15,11 +15,10 @@ final class DictationController {
         case failed(String)
     }
 
-    /// Shorter holds are accidental taps of Right Option, not dictation.
+    /// Shorter holds are accidental taps of the dictation key, not dictation.
     private static let minimumHold: TimeInterval = 0.3
     /// Keep listening briefly after release so the last word isn't clipped.
     private static let releaseTail: Duration = .milliseconds(150)
-    private static let noiseSuppressionKey = "noiseSuppression"
     private static let aiReviewKey = "aiReview"
 
     var onChange: (() -> Void)?
@@ -28,16 +27,6 @@ final class DictationController {
     private(set) var state: State = .loadingModel { didSet { onChange?() } }
     private(set) var lastTranscript: String? { didSet { onChange?() } }
     private(set) var lastError: String? { didSet { onChange?() } }
-
-    /// Apple voice processing (noise suppression + automatic gain). Off by default: the
-    /// Phase 1 benchmark was recorded without it. Untested on real dictation yet.
-    var noiseSuppression: Bool {
-        get { UserDefaults.standard.bool(forKey: Self.noiseSuppressionKey) }
-        set {
-            UserDefaults.standard.set(newValue, forKey: Self.noiseSuppressionKey)
-            onChange?()
-        }
-    }
 
     /// Proofread each dictation with Apple's on-device model before typing it. On by default:
     /// on the user's clips it cut the punctuation-aware error rate from 13.1% to 9.1%.
@@ -98,7 +87,7 @@ final class DictationController {
             return
         }
         do {
-            try startRecorder()
+            try recorder.start()
             recordingStartedAt = Date()
             lastError = nil
             state = .recording
@@ -107,19 +96,6 @@ final class DictationController {
             logger.error("mic start failed: \(error.localizedDescription, privacy: .public)")
             lastError = "Microphone error: \(error.localizedDescription)"
             onNotice?("Microphone unavailable")
-        }
-    }
-
-    /// Noise suppression is optional: if Apple's voice processing won't start on this audio
-    /// setup, record without it rather than not at all.
-    private func startRecorder() throws {
-        guard noiseSuppression else { return try recorder.start(voiceProcessing: false) }
-        do {
-            try recorder.start(voiceProcessing: true)
-        } catch {
-            logger.error("voice processing failed, recording without it: \(error.localizedDescription, privacy: .public)")
-            try recorder.start(voiceProcessing: false)
-            onNotice?("Noise suppression unavailable — recording without it")
         }
     }
 
@@ -141,20 +117,27 @@ final class DictationController {
             let samples = recorder.stop()
             play("Pop")
             let start = Date()
+            let options = self.options
+            // Read the text before the cursor while Parakeet runs; only the AI review uses it.
+            let contextTask = options.aiReview ? Task.detached { FocusedTextContext.read() } : nil
             do {
-                let options = self.options
                 var stages = try await pipeline.transcribe(samples, options: options)
                 let transcribed = Date()
+                var contextLength = 0
                 if options.aiReview, !stages.cleaned.isEmpty, aiReviewUnavailableReason == nil {
                     state = .reviewing
-                    stages = await pipeline.review(stages, options: options)
+                    let context = await contextTask?.value
+                    contextLength = context?.count ?? 0
+                    stages = await pipeline.review(stages, options: options, context: context)
                 }
                 // Log timings and sizes only — never what was said.
                 logger.info("""
                     \(Double(samples.count) / SpeechRecognizer.sampleRate, format: .fixed(precision: 1)) s audio: \
                     transcribed in \(transcribed.timeIntervalSince(start), format: .fixed(precision: 2)) s, \
                     reviewed in \(Date().timeIntervalSince(transcribed), format: .fixed(precision: 2)) s \
-                    (accepted: \(String(describing: stages.reviewAccepted), privacy: .public)), \(stages.final.count) chars
+                    (accepted: \(String(describing: stages.reviewAccepted), privacy: .public), \
+                    \(stages.uncertainWords.count) unsure words, \(contextLength) chars of context), \
+                    \(stages.final.count) chars
                     """)
                 let text = stages.final
                 if text.isEmpty {

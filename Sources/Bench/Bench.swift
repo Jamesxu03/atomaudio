@@ -67,14 +67,17 @@ struct Options {
     var clipsDirectory = URL(fileURLWithPath: "TestClips/mine")
     var engines = EngineID.defaultSet
     var outputDirectory = URL(fileURLWithPath: "BenchResults")
+    var confidence = false
 
     static let usage = """
-        Usage: swift run -c release Bench [--clips DIR] [--engines LIST] [--out DIR]
+        Usage: swift run -c release Bench [--clips DIR] [--engines LIST] [--out DIR] [--confidence]
 
           --clips DIR     Folder of audio files, each with a same-named .txt reference (default: TestClips/mine)
           --engines LIST  Comma-separated, from: \(EngineID.allCases.map(\.rawValue).joined(separator: ", "))
                           (default: \(EngineID.defaultSet.map(\.rawValue).joined(separator: ",")))
           --out DIR       Where the markdown report goes (default: BenchResults)
+          --confidence    Instead of comparing engines, check whether Parakeet v2's wrong words are the
+                          ones it was least confident about
         """
 
     static func parse(_ arguments: [String]) throws -> Options {
@@ -93,6 +96,8 @@ struct Options {
                     }
                     return id
                 }
+            case "--confidence":
+                options.confidence = true
             case "-h", "--help":
                 print(usage)
                 exit(0)
@@ -132,6 +137,9 @@ struct Bench {
         print("Clips: \(clips.count) (\(String(format: "%.0f", totalAudio)) s of audio, \(totalWords) reference words)")
         if totalWords < 200 {
             print("  note: under ~200 words, a single mistake moves WER a lot — treat small gaps as ties.")
+        }
+        if options.confidence {
+            return try await ConfidenceReport.run(clips: clips, outputDirectory: options.outputDirectory)
         }
 
         var summaries: [EngineSummary] = []

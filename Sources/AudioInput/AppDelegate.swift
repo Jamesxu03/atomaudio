@@ -1,9 +1,10 @@
 import AppKit
 import AVFoundation
 import DictationCore
+import ServiceManagement
 
-/// Menu-bar icon and menu, plus the two permissions the app needs:
-/// Microphone (to hear you) and Accessibility (to see Right ⌥ globally and to press ⌘V).
+/// Menu-bar icon and menu, plus the two permissions the app needs: Microphone (to hear you) and
+/// Accessibility (to see the dictation key globally, read the text before the cursor, and press ⌘V).
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let controller = DictationController()
@@ -13,6 +14,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var accessibilityTimer: Timer?
     private var hasAccessibility = false
     private var microphoneStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+    private static let hotkeyKey = "hotkey"
+
+    private var hotkeyChoice: Hotkey {
+        get { UserDefaults.standard.string(forKey: Self.hotkeyKey).flatMap(Hotkey.init) ?? .default }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: Self.hotkeyKey)
+            hotkey.key = newValue
+        }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -31,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotkey.onPress = { [weak self] in self?.controller.beginRecording() }
         hotkey.onRelease = { [weak self] in self?.controller.finishRecording() }
         hotkey.onCancel = { [weak self] in self?.controller.cancelRecording() }
+        hotkey.key = hotkeyChoice
 
         requestMicrophone()
         checkAccessibility(prompt: true)
@@ -94,14 +105,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusText: String {
         switch controller.state {
         case .loadingModel: return "Loading speech model…"
-        case .recording: return "Listening… release Right ⌥ to type"
+        case .recording: return "Listening… release \(hotkeyChoice.shortName) to type"
         case .transcribing: return "Transcribing…"
         case .reviewing: return "Reviewing with on-device AI…"
         case .failed(let message): return message
         case .ready:
             if microphoneStatus != .authorized { return "Needs microphone access" }
             if !hasAccessibility { return "Needs Accessibility permission" }
-            return "Ready — hold Right ⌥ and speak"
+            return "Ready — hold \(hotkeyChoice.shortName) and speak"
         }
     }
 
@@ -136,13 +147,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             review.state = controller.aiReview ? .on : .off
             menu.addItem(review)
         }
-        let noise = item("Noise Suppression (Apple Voice Processing)", #selector(toggleNoiseSuppression))
-        noise.state = controller.noiseSuppression ? .on : .off
-        menu.addItem(noise)
+        menu.addItem(hotkeyMenuItem())
         menu.addItem(item("Edit Word List…", #selector(editWordList)))
+        let login = item("Launch at Login", #selector(toggleLaunchAtLogin))
+        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        menu.addItem(login)
 
         menu.addItem(.separator())
         menu.addItem(item("Quit Audio Input", #selector(quit), key: "q"))
+    }
+
+    private func hotkeyMenuItem() -> NSMenuItem {
+        let submenu = NSMenu()
+        for key in Hotkey.allCases {
+            let choice = item(key.title, #selector(chooseHotkey(_:)))
+            choice.representedObject = key.rawValue
+            choice.state = key == hotkeyChoice ? .on : .off
+            if key == .function {
+                choice.toolTip = "Set System Settings → Keyboard → “Press 🌐 key to” to “Do Nothing”, "
+                    + "or fn will also open emoji or start Apple's dictation."
+            }
+            submenu.addItem(choice)
+        }
+        let parent = NSMenuItem(title: "Dictation Key: \(hotkeyChoice.shortName)", action: nil, keyEquivalent: "")
+        parent.submenu = submenu
+        return parent
     }
 
     private func item(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {
@@ -176,8 +205,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSPasteboard.general.setString(last, forType: .string)
     }
 
-    @objc private func toggleNoiseSuppression() {
-        controller.noiseSuppression.toggle()
+    @objc private func chooseHotkey(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let key = Hotkey(rawValue: raw) else { return }
+        hotkeyChoice = key
+        if key == .function {
+            overlay.showNotice("Set “Press 🌐 key to” to “Do Nothing” in Keyboard settings")
+        }
+    }
+
+    /// Registers this copy of the app as a login item. macOS may ask to approve it in
+    /// System Settings → General → Login Items; that page is opened when it does.
+    @objc private func toggleLaunchAtLogin() {
+        let service = SMAppService.mainApp
+        do {
+            if service.status == .enabled {
+                try service.unregister()
+            } else {
+                try service.register()
+            }
+        } catch {
+            overlay.showNotice("Couldn't change Launch at Login")
+        }
+        if service.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
     }
 
     @objc private func quit() {

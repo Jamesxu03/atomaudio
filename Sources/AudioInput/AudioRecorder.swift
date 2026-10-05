@@ -6,7 +6,6 @@ final class AudioRecorder {
     static let sampleRate = 16_000.0
 
     private var engine: AVAudioEngine?
-    private var engineUsesVoiceProcessing = false
     private var configurationObserver: NSObjectProtocol?
     private let lock = NSLock()
     private var samples: [Float] = []
@@ -17,8 +16,8 @@ final class AudioRecorder {
     /// RMS loudness of the most recent audio chunk (0...1 linear), for the on-screen meter.
     var level: Float { lock.withLock { latestLevel } }
 
-    func start(voiceProcessing: Bool) throws {
-        let engine = try preparedEngine(voiceProcessing: voiceProcessing)
+    func start() throws {
+        let engine = preparedEngine()
         lock.withLock {
             samples.removeAll(keepingCapacity: true)
             latestLevel = 0
@@ -71,18 +70,11 @@ final class AudioRecorder {
     }
 
     /// Reuses one engine between recordings so the mic starts quickly, and rebuilds it when
-    /// the voice-processing setting or the input device (e.g. AirPods connecting) changes.
-    private func preparedEngine(voiceProcessing: Bool) throws -> AVAudioEngine {
-        if let engine, engineUsesVoiceProcessing == voiceProcessing { return engine }
-        discardEngine()
+    /// the input device changes (e.g. AirPods connecting).
+    private func preparedEngine() -> AVAudioEngine {
+        if let engine { return engine }
 
         let engine = AVAudioEngine()
-        if voiceProcessing {
-            // Apple's noise suppression + automatic gain. Leave the output side alone: touching
-            // mainMixerNode wires it at a default format, and voice processing then fails to
-            // start with -10875 ("client-side input and output formats do not match").
-            try engine.inputNode.setVoiceProcessingEnabled(true)
-        }
         configurationObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
         ) { [weak self] _ in
@@ -90,7 +82,6 @@ final class AudioRecorder {
             self.discardEngine()
         }
         self.engine = engine
-        engineUsesVoiceProcessing = voiceProcessing
         return engine
     }
 

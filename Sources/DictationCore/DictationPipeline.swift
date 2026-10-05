@@ -20,11 +20,18 @@ public final class DictationPipeline {
         public var boosted = ""
         public var cleaned = ""
         public var reviewed = ""
+        /// Words Parakeet was unsure it heard right, passed to the review as the likeliest mistakes.
+        public var uncertainWords: [String] = []
         /// nil when the review didn't run.
         public var reviewAccepted: Bool?
 
         public var final: String { reviewed.isEmpty ? cleaned : reviewed }
     }
+
+    /// On the user's clips, 7 of Parakeet's 21 wrong words scored below 0.7 while only 9% of all
+    /// words did; raising the cutoff to 0.85 flagged 16 more correct words and no more wrong ones.
+    /// Measure with `Bench --confidence`.
+    public static let uncertainBelow: Float = 0.7
 
     public let reviewer = AIReviewer()
     public private(set) var vocabulary = Vocabulary.empty
@@ -56,6 +63,7 @@ public final class DictationPipeline {
         var stages = Stages()
         let recognition = try await recognizer.recognize(samples)
         stages.recognized = recognition.text
+        stages.uncertainWords = Self.uncertainWords(in: recognition.words)
         stages.boosted = options.boostWordList && boosterReady
             ? await booster.apply(to: recognition)
             : recognition.text
@@ -64,13 +72,29 @@ public final class DictationPipeline {
     }
 
     /// Step 2 (the "Reviewing…" part): on-device AI proofreading, kept only if it stays faithful.
-    public func review(_ stages: Stages, options: Options) async -> Stages {
+    /// `context` is the text just before the cursor, so the review knows the topic.
+    public func review(_ stages: Stages, options: Options, context: String? = nil) async -> Stages {
         guard options.aiReview, !stages.cleaned.isEmpty, reviewer.unavailableReason == nil else { return stages }
         var stages = stages
-        let outcome = await reviewer.review(stages.cleaned, vocabulary: vocabulary)
+        let outcome = await reviewer.review(
+            stages.cleaned, vocabulary: vocabulary, uncertainWords: stages.uncertainWords, context: context)
         stages.reviewed = outcome.text
         stages.reviewAccepted = outcome.accepted
         return stages
+    }
+
+    /// Low-confidence lowercase words without their punctuation, each listed once. Capitalized words
+    /// (names, products, acronyms) are left out: a text-only review can't recover a name it never
+    /// heard, and flagging "VS Code" made it expand to "Visual Studio Code". The mix-ups that context
+    /// can fix are between everyday words: act/app, tabs/types, call/corps.
+    public static func uncertainWords(in words: [RecognizedWord]) -> [String] {
+        var seen = Set<String>()
+        return words.filter { $0.confidence < uncertainBelow }
+            .map { $0.text.trimmingCharacters(in: .punctuationCharacters) }
+            .filter { word in
+                guard let first = word.first, first.isLowercase else { return false }
+                return seen.insert(word).inserted
+            }
     }
 
     /// Picks up edits to the word list file before each dictation.
