@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+# Your voice recordings stay on this Mac — never commit them.
+TestClips/mine*/
+BenchResults/
+build/
+.DS_Store

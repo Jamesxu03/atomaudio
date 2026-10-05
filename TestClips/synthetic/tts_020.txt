@@ -1,0 +1,1 @@
+I tried the new build this morning and it feels a lot faster, but the settings page still crashes when I switch tabs quickly, so I'm going to file a bug with the steps to reproduce.

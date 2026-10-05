@@ -1,0 +1,1 @@
+Our Kubernetes cluster autoscales based on CPU usage and memory pressure.

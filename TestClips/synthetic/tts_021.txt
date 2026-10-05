@@ -1,0 +1,1 @@
+Honestly, I think we should keep the first version simple, focus on getting the core flow working really well, and only add the extra features once people are actually using it every day.

@@ -1,0 +1,1 @@
+Run npm install, then open the JSON config file in VS Code.

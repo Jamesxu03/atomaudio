@@ -1,0 +1,35 @@
+# Test sentences for RecordClips — one per line. Lines starting with # are ignored.
+# Write each line exactly how you'd want it typed (digits, capitals, punctuation).
+# Replace or add lines with the names, products and jargon YOU actually dictate:
+# that's where engines differ the most.
+
+# Everyday messages
+Hey, are you free for a quick call this afternoon?
+Thanks for the update. I'll take a look tonight and get back to you tomorrow morning.
+Can we move our meeting to Thursday at 3:30 PM?
+Sounds good to me, let's go with the second option.
+I'm running about ten minutes late, sorry about that.
+
+# Work and email
+Hi team, here is a quick summary of what we shipped this week.
+The main blocker right now is the login bug on the staging server.
+Please review the pull request before end of day so we can merge it on Monday.
+Let me know if you have any questions or concerns about the new timeline.
+I attached the slides from today's presentation for anyone who missed it.
+
+# Technical terms
+We should cache the API response and retry the request with exponential backoff.
+The Swift package depends on Core ML and runs on the Apple Neural Engine.
+Run npm install, then open the JSON config file in VS Code.
+The GitHub Actions workflow failed because the Docker image was out of date.
+Our Kubernetes cluster autoscales based on CPU usage and memory pressure.
+
+# Names, numbers and dates
+My phone number is 415-555-0132 and my email is on the second page.
+The invoice total was $1,249.50, due on October 15th.
+Sarah and Miguel will join the call from London and Toronto.
+We need about 25% more storage, roughly 2 terabytes.
+
+# Longer, natural dictation (speak at your normal pace)
+I tried the new build this morning and it feels a lot faster, but the settings page still crashes when I switch tabs quickly, so I'm going to file a bug with the steps to reproduce.
+Honestly, I think we should keep the first version simple, focus on getting the core flow working really well, and only add the extra features once people are actually using it every day.
