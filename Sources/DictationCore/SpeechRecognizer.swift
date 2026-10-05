@@ -54,18 +54,47 @@ public final class SpeechRecognizer {
     /// Parakeet needs at least 0.3 s; very short words decode more reliably with a little padding.
     private static let minimumSamples = Int(sampleRate)
 
+    /// The copy of the model shipped inside the app (Contents/Resources/Models/…), added by
+    /// `Scripts/build_app.sh --bundle-model` so a shared app works offline from the first launch.
+    /// The folder name is what FluidAudio expects for v2.
+    public static let bundledModelPath = "Models/parakeet-tdt-0.6b-v2"
+
     private var manager: AsrManager?
+    /// "app bundle" or "shared cache", for the log and the packaging check.
+    public private(set) var modelSource = ""
 
     public init() {}
 
-    /// Loads from the local model cache (downloads once on the very first run), then warms up
-    /// so the first real dictation is as fast as the rest.
+    /// Loads the model, then warms up so the first real dictation is as fast as the rest.
     public func load() async throws {
-        let models = try await AsrModels.downloadAndLoad(version: .v2)
+        let models = try await loadModels()
         let manager = AsrManager(config: .default)
         try await manager.loadModels(models)
         self.manager = manager
         _ = try? await recognize([Float](repeating: 0, count: Self.minimumSamples))
+    }
+
+    /// The copy inside the app if there is one; otherwise the shared cache in Application Support,
+    /// downloading it once from Hugging Face if needed.
+    private func loadModels() async throws -> AsrModels {
+        if let bundled = Bundle.main.resourceURL?.appendingPathComponent(Self.bundledModelPath),
+           AsrModels.modelsExist(at: bundled, version: .v2) {
+            // Offline mode, so a failed load can't make FluidAudio "repair" the folder by deleting it
+            // and downloading into the signed app. On failure, fall through to the shared cache.
+            ModelHub.offlineMode = true
+            defer { ModelHub.offlineMode = false }
+            if let models = try? await AsrModels.load(from: bundled, version: .v2) {
+                modelSource = "app bundle"
+                return models
+            }
+        }
+        modelSource = "shared cache"
+        return try await AsrModels.downloadAndLoad(version: .v2)
+    }
+
+    /// For checks and tools: transcribe an audio file in any common format.
+    public func recognize(fileAt url: URL) async throws -> Recognition {
+        try await recognize(try AudioConverter().resampleAudioFile(url))
     }
 
     public func recognize(_ samples: [Float]) async throws -> Recognition {

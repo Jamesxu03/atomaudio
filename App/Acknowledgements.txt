@@ -1,0 +1,23 @@
+Audio Input — acknowledgements
+
+Audio Input is built on the following work. Thank you to their authors.
+
+SPEECH RECOGNITION MODEL
+Parakeet TDT 0.6B v2 by NVIDIA
+  https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2
+  Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0)
+  https://creativecommons.org/licenses/by/4.0/
+Converted to Core ML by FluidInference:
+  https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v2-coreml (CC BY 4.0)
+The converted model is included in this app without further changes.
+
+SPEECH RECOGNITION LIBRARY
+FluidAudio by FluidInference
+  https://github.com/FluidInference/FluidAudio
+  Licensed under the Apache License, Version 2.0. The full license text and
+  FluidAudio's own third-party notices follow below.
+
+APPLE FRAMEWORKS
+The optional AI review uses Apple Intelligence's on-device model through
+Apple's Foundation Models framework, which is part of macOS.
+

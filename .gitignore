@@ -5,3 +5,4 @@ TestClips/mine*/
 BenchResults/
 build/
 .DS_Store
+dist/

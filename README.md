@@ -60,6 +60,23 @@ To check the design without a mic: `.build/release/AudioInput --render-overlay-p
 
 **After every rebuild, macOS asks for the permissions again.** The app is signed "ad-hoc", so each build looks like a new app to macOS. The build script clears the old grants for you. To avoid re-granting, sign with a real certificate: `SIGN_IDENTITY="Apple Development: …" Scripts/build_app.sh`. You can get one for free with an Apple ID in Xcode.
 
+## Share it with friends and colleagues
+
+```sh
+Scripts/make_dmg.sh        # → dist/Audio-Input-<version>.dmg, about 440 MB
+```
+
+The DMG holds the app with the speech model inside, a shortcut to Applications, and `Read Me First.txt` with install steps written for people who've never seen the project. Before building the DMG, the script checks that the packaged app loads its own copy of the model and correctly transcribes a test clip.
+
+- **Who can use it:** Macs with Apple silicon (M1 or newer) on macOS 26 or later. English only.
+- **Offline from the first launch.** The model is inside the app, so nothing is downloaded, which also helps where Hugging Face is blocked. The first launch on a new Mac takes about 25 s while macOS prepares the model for the Neural Engine. Later launches take under a second.
+- **macOS blocks the first launch.** The app isn't notarized, because notarizing needs a paid Apple Developer account ($99/year). Each person clicks **Open Anyway** in System Settings → Privacy & Security once. The read-me walks them through it.
+- **Updates:** raise `CFBundleShortVersionString` in `App/Info.plist` and rerun the script. The app is ad-hoc signed, so people grant Accessibility and Microphone again after each update. The read-me explains how.
+- **Publishing:** on GitHub, go to **Releases → Draft a new release**, create a tag such as `v0.1.0`, attach the DMG and publish. This repo is public, so anyone with the link can download it. Don't commit the DMG; `dist/` is git-ignored.
+- **Licenses:** the DMG redistributes NVIDIA's Parakeet model (CC BY 4.0) and FluidAudio (Apache 2.0). `build_app.sh` writes their notices to `Audio Input.app/Contents/Resources/Acknowledgements.txt`.
+- **Word list:** everyone starts with your IP-scouting word list and can change it with **Edit Word List…**.
+- **Your own copy:** `make_dmg.sh` rebuilds `build/Audio Input.app` too, so macOS asks for your permissions again afterwards, the same as after any build.
+
 ## Phase 0: record your voice
 
 ```sh

@@ -68,7 +68,10 @@ final class DictationController {
             let start = Date()
             do {
                 try await pipeline.load(options: options)
-                logger.info("model ready in \(Date().timeIntervalSince(start), format: .fixed(precision: 2)) s")
+                logger.info("""
+                    model ready in \(Date().timeIntervalSince(start), format: .fixed(precision: 2)) s \
+                    from \(self.pipeline.modelSource, privacy: .public)
+                    """)
                 state = .ready
             } catch {
                 logger.error("model load failed: \(error.localizedDescription, privacy: .public)")

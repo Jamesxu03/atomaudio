@@ -35,6 +35,8 @@ public final class DictationPipeline {
 
     public let reviewer = AIReviewer()
     public private(set) var vocabulary = Vocabulary.empty
+    /// Where the speech model came from: "app bundle" or "shared cache".
+    public var modelSource: String { recognizer.modelSource }
 
     private let recognizer = SpeechRecognizer()
     private let booster = VocabularyBooster()
